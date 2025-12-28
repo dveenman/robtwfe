@@ -1,6 +1,7 @@
 # robtwfe
 
 A Stata program to combine robust regression estimation (Huber M) with two-way fixed effects 
+
 by David Veenman (University of Amsterdam)
 
 **Comments/feedback welcome**
