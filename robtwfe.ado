@@ -11,6 +11,7 @@ Dependencies:
 */
 
 program define robtwfe, eclass sortpreserve
+	version 19.5
 	syntax [anything] [in] [if], cluster(varlist) ivar(str) tvar(str) eff(real) [tol(real 0) weightvar(str) omitr2]
 
 	capt findfile mf_mm_aqreg.hlp
