@@ -1,6 +1,7 @@
-*! version 1.0.0 20251228 David Veenman
+*! version 1.0.1 20251230 David Veenman
 
 /*
+20251230: 1.0.1     Made areg default given faster execution, reghdfe is used for Stata versions below 19
 20251224: 1.0.0     First version
 
 Dependencies:
@@ -21,10 +22,12 @@ program define robtwfe, eclass sortpreserve
 	}
 
 	capt findfile reghdfe.ado 
-	if _rc {
+	if (_rc & _caller()<19) {
 		di as error "Program requires the {bf:reghdfe} package: type {stata ssc install reghdfe, replace}"
 		error 499
 	}
+	
+	local stataversion=_caller()
 	
 	capt findfile hdfe.ado 
 	if _rc {
@@ -176,8 +179,14 @@ program define robtwfe, eclass sortpreserve
     forvalues i=1(1)`maxiter'{
         if `diff'>`tolerance' {
 			qui capture drop `_resid_temp'
-			qui capture reghdfe `depv' `indepv' [aw = `w'] if `touse', absorb(`ivar' `tvar') dof(none) notable nofootnote noheader resid keepsin
-			qui ren _reghdfe_resid `_resid_temp' 
+			if (`stataversion'<19) {
+				qui capture reghdfe `depv' `indepv' [aw = `w'] if `touse', absorb(`ivar' `tvar') dof(none) notable nofootnote noheader resid keepsin
+				qui ren _reghdfe_resid `_resid_temp' 
+			}
+			else {
+				qui capture areg `depv' `indepv' [aw = `w'] if `touse', absorb(`ivar' `tvar') noabs 
+				qui predict `_resid_temp', res 
+			}
 			matrix b=e(b)            
             if `i'>1 {
                 local diff=mreldif(b0,b)
