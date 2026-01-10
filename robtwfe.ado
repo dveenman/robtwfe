@@ -1,6 +1,7 @@
-*! version 1.0.1 20251230 David Veenman
+*! version 1.0.2 20260110 David Veenman
 
 /*
+20260110: 1.0.2     Small bug fix for older Stata versions, plus added checks for non-binary DV and nested FEs
 20251230: 1.0.1     Made areg default given faster execution, reghdfe is used for Stata versions below 19
 20251224: 1.0.0     First version
 
@@ -60,11 +61,18 @@ program define robtwfe, eclass sortpreserve
 	_fv_check_depvar `depv'
 	macro shift 1
 	local indepv "`*'"
+
+	// Ensure dv is not an indicator variable:
+	qui capture assert inlist(`depv', 0, 1)
+	if _rc==0 {
+        di as err "ERROR: Dependent variable should not be an indicator (0/1) variable"
+        exit 		
+	}	
 	
 	// Ensure iv list does not contain a factor variable:
     fvexpand `indepv'
     if "`r(fvops)'" == "true" {
-        di as err "Independent variable list may not contain factor variables"
+        di as err "ERROR: Independent variable list may not contain factor variables"
         exit 
     }
 	else {
@@ -86,6 +94,20 @@ program define robtwfe, eclass sortpreserve
 	scalar k0 = `varcount'
 	
 	// Check absorb variables:
+	if "`ivar'"=="`tvar'" {
+	    di as err "ERROR: Options ivar() and tvar() must contain different variables"
+		exit				
+	}
+	capture bysort `ivar': assert `tvar'==`tvar'[1] if !missing(`ivar', `tvar')
+	if _rc==0 {
+	    di as err "ERROR: ivar()-variable is nested within tvar()-variable "
+		exit				
+	}
+	capture bysort `tvar': assert `ivar'==`ivar'[1] if !missing(`tvar', `ivar')
+	if _rc==0 {
+	    di as err "ERROR: tvar()-variable is nested within ivar()-variable "
+		exit				
+	}	
 	local n1: word count `ivar'
 	if (`n1'!=1){
 	    di as err "ERROR: Option ivar() may contain only one variable"
@@ -98,9 +120,9 @@ program define robtwfe, eclass sortpreserve
 	}
 	
 	// Check nesting of FE in clusters:
-	capture assertnested `cluster' `ivar'
+	capture bysort `ivar': assert `cluster'==`cluster'[1] if !missing(`ivar', `cluster')
 	local nest1=(_rc!=0)
-	capture assertnested `cluster' `tvar'
+	capture bysort `tvar': assert `cluster'==`cluster'[1] if !missing(`tvar', `cluster')
 	local nest2=(_rc!=0)
 	if (`nest2'==1) {
 		local nest1dof = 0
@@ -213,10 +235,13 @@ program define robtwfe, eclass sortpreserve
 	}
 	
 	qui replace `phi'=1e-20 if `phi'==0 // Ensure that residualized values are also created for phi=0 cases
-	qui hdfe `indepv' if `touse' [aw = `phi'], absorb(`ivar' `tvar') gen(_tilde_) keepsin
+	qui hdfe `indepv' if `touse' [aw = `phi'], absorb(`ivar' `tvar') gen(_stub_) keepsin
 	local indepvr ""
 	foreach v of local indepv {
-		local indepvr "`indepvr' _tilde_`v'"
+		tempvar _tilde_`v'
+		qui gen `_tilde_`v''=_stub_`v'
+		drop _stub_`v'
+		local indepvr "`indepvr' `_tilde_`v''"
 	}
 
 	// For calculation of Pseudo R2:
@@ -225,7 +250,7 @@ program define robtwfe, eclass sortpreserve
 		matrix mu0=mu0
 		local madn=scale0
 		qui robreg m `depv' if `touse', eff(95) nor2 nose tol(`tolerance') init(mu0) scale(`madn')
-		scalar mu=e(b)[1,1]				
+		scalar mu=_b[_cons]				
 	}
 	
 	mata: ""
@@ -314,9 +339,6 @@ program define robtwfe, eclass sortpreserve
 	
 	matrix drop beta Vc Vclust b b0
 	scalar drop df_initial eff mata_nclusters scale krob
-	foreach v of local indepv {
-		drop _tilde_`v'
-	}
 	
 end
 
