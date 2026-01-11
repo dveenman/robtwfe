@@ -1,6 +1,7 @@
-*! version 1.0.2 20260110 David Veenman
+*! version 1.0.3 20260111 David Veenman
 
 /*
+20260111: 1.0.3     Small bug fix for handling missing values in absorbed time variable
 20260110: 1.0.2     Small bug fix for older Stata versions, plus added checks for non-binary DV and nested FEs
 20251230: 1.0.1     Made areg default given faster execution, reghdfe is used for Stata versions below 19
 20251224: 1.0.0     First version
@@ -131,9 +132,14 @@ program define robtwfe, eclass sortpreserve
 		local nest1dof = `nest1'
 	}
 	local nest2dof = `nest2'
+
+	// Convert absorb variables to values available in touse:
+	tempvar ivarid tvarid
+	qui egen double `ivarid'=group(`ivar') if `touse'
+	qui egen double `tvarid'=group(`tvar') if `touse'
 	
 	// For LAD estimation, expand indepv list to include time indicators:
-	local indepv2 "i.`tvar' `indepv'"
+	local indepv2 "i.`tvarid' `indepv'"
 	fvexpand `indepv2'
 	local indepv2 `r(varlist)'
 	local fvcheck `r(fvops)'
@@ -172,12 +178,10 @@ program define robtwfe, eclass sortpreserve
 
 	qui sum `depv' if `touse'
     local N=r(N)
-	tempvar ivarid tvarid _resid_temp w phi
+	tempvar _resid_temp w phi
 	qui gen double `phi'=.
-	qui egen double `ivarid'=group(`ivar') if `touse'
 	qui sum `ivarid'
 	local ni=r(max)
-	qui egen double `tvarid'=group(`tvar') if `touse'
 	qui sum `tvarid'
 	local nt=r(max)
 	local Kinit: word count `indepv2' 
@@ -202,11 +206,11 @@ program define robtwfe, eclass sortpreserve
         if `diff'>`tolerance' {
 			qui capture drop `_resid_temp'
 			if (`stataversion'<19) {
-				qui capture reghdfe `depv' `indepv' [aw = `w'] if `touse', absorb(`ivar' `tvar') dof(none) notable nofootnote noheader resid keepsin
+				qui capture reghdfe `depv' `indepv' [aw = `w'] if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
 				qui ren _reghdfe_resid `_resid_temp' 
 			}
 			else {
-				qui capture areg `depv' `indepv' [aw = `w'] if `touse', absorb(`ivar' `tvar') noabs 
+				qui capture areg `depv' `indepv' [aw = `w'] if `touse', absorb(`ivarid' `tvarid') noabs 
 				qui predict `_resid_temp', res 
 			}
 			matrix b=e(b)            
@@ -235,7 +239,7 @@ program define robtwfe, eclass sortpreserve
 	}
 	
 	qui replace `phi'=1e-20 if `phi'==0 // Ensure that residualized values are also created for phi=0 cases
-	qui hdfe `indepv' if `touse' [aw = `phi'], absorb(`ivar' `tvar') gen(_stub_) keepsin
+	qui hdfe `indepv' if `touse' [aw = `phi'], absorb(`ivarid' `tvarid') gen(_stub_) keepsin
 	local indepvr ""
 	foreach v of local indepv {
 		tempvar _tilde_`v'
@@ -399,7 +403,7 @@ mata:
 	void _lad_initial() {
 		st_view(y=., ., tokens(st_local("depv")), st_local("touse"))
 		st_view(X=., ., tokens(st_local("indepv2")), st_local("touse"))
-        st_view(ivar=., ., tokens(st_local("ivar")), st_local("touse"))
+        st_view(ivar=., ., tokens(st_local("ivarid")), st_local("touse"))
         df=st_numscalar("df_initial")
 		eff=st_numscalar("eff")
         n=rows(X)		
