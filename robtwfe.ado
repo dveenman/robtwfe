@@ -1,6 +1,7 @@
-*! version 1.0.3 20260111 David Veenman
+*! version 1.0.4 20260213 David Veenman
 
 /*
+20260213: 1.0.4     Return scale parameter 
 20260111: 1.0.3     Small bug fix for handling missing values in absorbed time variable
 20260110: 1.0.2     Small bug fix for older Stata versions, plus added checks for non-binary DV and nested FEs
 20251230: 1.0.1     Made areg default given faster execution, reghdfe is used for Stata versions below 19
@@ -288,6 +289,7 @@ program define robtwfe, eclass sortpreserve
 		ereturn scalar r2_p=r2_p
 	}
 	ereturn scalar N_clust=`nclusterdim1'
+	ereturn scalar scale=scale 
 	
 	di ""
 	di in green "Huber M-estimation with `eff'% normal efficiency and twoway fixed effects by " ///
