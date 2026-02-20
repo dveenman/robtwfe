@@ -1,6 +1,7 @@
-*! version 1.0.4 20260213 David Veenman
+*! version 1.0.5 20260220 David Veenman
 
 /*
+20260220: 1.0.5     Speed improvement: replaced first-step MM-QR estimation to allow for multiple fixed effects 
 20260213: 1.0.4     Return scale parameter 
 20260111: 1.0.3     Small bug fix for handling missing values in absorbed time variable
 20260110: 1.0.2     Small bug fix for older Stata versions, plus added checks for non-binary DV and nested FEs
@@ -172,11 +173,52 @@ program define robtwfe, eclass sortpreserve
 	tempvar clus1  
 	qui egen double `clus1'=group(`clusterdim1') if `touse'
 		
+	di ""
     /////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
-	di ""
-	di as text "STEP 1: Estimating LAD and obtaining scale estimate"
+	di as text "STEP 1: Estimating initial MM-QR and obtaining scale estimate"
+    /////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
 
+	// Location stage MM-QR (Machado and Santos Silva 2019)
+	tempvar yhat_loc e Ipos r_raw denom u resid_tau
+	if (`stataversion'<19) {
+		qui capture reghdfe `depv' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
+		qui predict double `yhat_loc' if `touse', xbd
+		qui ren _reghdfe_resid `e'
+	}
+	else {
+		qui capture areg `depv' `indepv' if `touse', absorb(`ivarid' `tvarid') noabs 
+		qui predict double `yhat_loc' if `touse', xbd
+		qui predict double `e' if `touse', res
+	}
+
+	// Scale stage
+	gen `Ipos' = (`e'>=0) if `touse'
+	qui sum `Ipos' if `touse', meanonly
+	scalar Ibar = r(mean)
+	gen double `r_raw' = 2*`e'*(`Ipos' - Ibar) if `touse'
+
+	if (`stataversion'<19) {
+		qui capture reghdfe `r_raw' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
+	}
+	else {
+		qui capture areg `r_raw' `indepv' if `touse', absorb(`ivarid' `tvarid') noabs
+	}
+	qui predict double `denom' if `touse', xbd
+	
+	scalar eps = sqrt(c(epsdouble))
+	qui replace `denom' = eps if `denom' < eps & `touse'
+
+	// Standardized residuals and create qhat 
+	gen double `u' = `e'/`denom' if `touse'
+	qui sum `u' if `touse', d // Note: xtqreg and mmqreg use qreg on constant; I use percentile approach instead for consistency with robreg and Mata function mm_aqreg()
+	scalar qhat = r(p50)
+
+	// Residuals:
+	gen double `resid_tau' = `depv' - (`yhat_loc' + qhat*`denom') if `touse'
+	
+	// Get relevant information from the data before creating scale estimate:
 	qui sum `depv' if `touse'
     local N=r(N)
 	tempvar _resid_temp w phi
@@ -195,12 +237,16 @@ program define robtwfe, eclass sortpreserve
 	local nt_est = `nt' - (1-`nest2')*`nt' - `nest2dof'
 	local K: word count `indepv' 
 	local K = `K' + 1 + `ni_est' + `nt_est'
-	
+
+	// Get scale estimate and initial weights:
 	scalar eff=`eff'
-	mata: _lad_initial()
+	mata: _scale_initial()
 
+    /////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
 	di as text "STEP 2: Iterating IRWLS"
-
+    /////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
     local diff=100
 	local maxiter=c(maxiter)
     forvalues i=1(1)`maxiter'{
@@ -259,7 +305,11 @@ program define robtwfe, eclass sortpreserve
 	}
 	
 	mata: ""
+    /////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
 	di as text "STEP 3: Computing standard errors"
+    /////////////////////////////////////////////////////////////////////////////////////////
+	/////////////////////////////////////////////////////////////////////////////////////////
 
 	sort `clus1' 
 	local cvar "`clus1'"	
@@ -402,15 +452,11 @@ mata:
 		}
 	}
 	    
-	void _lad_initial() {
-		st_view(y=., ., tokens(st_local("depv")), st_local("touse"))
-		st_view(X=., ., tokens(st_local("indepv2")), st_local("touse"))
-        st_view(ivar=., ., tokens(st_local("ivarid")), st_local("touse"))
+	void _scale_initial() {
+        st_view(e=., ., tokens(st_local("resid_tau")), st_local("touse"))
         df=st_numscalar("df_initial")
 		eff=st_numscalar("eff")
-        n=rows(X)		
-		S = mm_aqreg(y, ivar, X)
-        e = mm_aqreg_e(S)
+        n=rows(e)		
         p = (2*n - df) / (2*n) 
         scale=mm_quantile(abs(e), 1, p) / invnormal(0.75) // For consistency with robreg
         z = e / scale
