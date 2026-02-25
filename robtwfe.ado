@@ -1,6 +1,7 @@
-*! version 1.0.5 20260220 David Veenman
+*! version 1.0.6 20260225 David Veenman
 
 /*
+20260225: 1.0.6     Small correction in dof calculation with collinear variables + some minor housekeeping 
 20260220: 1.0.5     Speed improvement: replaced first-step MM-QR estimation to allow for multiple fixed effects 
 20260213: 1.0.4     Return scale parameter 
 20260111: 1.0.3     Small bug fix for handling missing values in absorbed time variable
@@ -139,12 +140,16 @@ program define robtwfe, eclass sortpreserve
 	tempvar ivarid tvarid
 	qui egen double `ivarid'=group(`ivar') if `touse'
 	qui egen double `tvarid'=group(`tvar') if `touse'
-	
-	// For LAD estimation, expand indepv list to include time indicators:
-	local indepv2 "i.`tvarid' `indepv'"
-	fvexpand `indepv2'
-	local indepv2 `r(varlist)'
-	local fvcheck `r(fvops)'
+		
+	// Store info on estimated vs redundant parameters:	
+	qui sum `ivarid'
+	local ni=r(max)
+	qui sum `tvarid'
+	local nt=r(max)
+	local ni_red = (1-`nest1')*`ni' + `nest1dof'
+	local nt_red = (1-`nest2')*`nt' + `nest2dof'
+	local ni_est = `ni' - (1-`nest1')*`ni' - `nest1dof'
+	local nt_est = `nt' - (1-`nest2')*`nt' - `nest2dof'
 	
 	// Set tolerance:
 	if (`tol'!=0){
@@ -221,24 +226,13 @@ program define robtwfe, eclass sortpreserve
 	// Get relevant information from the data before creating scale estimate:
 	qui sum `depv' if `touse'
     local N=r(N)
-	tempvar _resid_temp w phi
-	qui gen double `phi'=.
-	qui sum `ivarid'
-	local ni=r(max)
-	qui sum `tvarid'
-	local nt=r(max)
-	local Kinit: word count `indepv2' 
+	local Kinit: word count `indepv' 
 	local Kinit = `Kinit' - `k_omitted'
-    scalar df_initial=`N'-`ni'-(`Kinit'-1)
-
-	local ni_red = (1-`nest1')*`ni' + `nest1dof'
-	local nt_red = (1-`nest2')*`nt' + `nest2dof'
-	local ni_est = `ni' - (1-`nest1')*`ni' - `nest1dof'
-	local nt_est = `nt' - (1-`nest2')*`nt' - `nest2dof'
-	local K: word count `indepv' 
-	local K = `K' + 1 + `ni_est' + `nt_est'
+    scalar df_initial=`N'-`ni'-`nt'-(`Kinit'-1)
+	local K = `Kinit' - `k_omitted' + 1 + `ni_est' + `nt_est'
 
 	// Get scale estimate and initial weights:
+	tempvar w 
 	scalar eff=`eff'
 	mata: _scale_initial()
 
@@ -247,6 +241,8 @@ program define robtwfe, eclass sortpreserve
 	di as text "STEP 2: Iterating IRWLS"
     /////////////////////////////////////////////////////////////////////////////////////////
 	/////////////////////////////////////////////////////////////////////////////////////////
+	tempvar _resid_temp phi
+	qui gen double `phi'=.
     local diff=100
 	local maxiter=c(maxiter)
     forvalues i=1(1)`maxiter'{
