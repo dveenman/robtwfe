@@ -1,0 +1,7 @@
+v 1
+d robtwfe: Stata program for robust regression with twoway fixed effects and standard error clustering
+d 
+d Author: David Veenman, University of Amsterdam, d.veenman@uva.nl
+d
+d Distribution-Date: 20260226
+f robtwfe.ado
