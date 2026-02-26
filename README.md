@@ -20,8 +20,8 @@ ssc inst hdfe, replace
 ssc inst reghdfe, replace *
 ssc inst robreg, replace **
 ```
-* For Stata versions below 19; for version 19 or higher, the built-in areg function is used.
-** Used only in calculation of pseudo-R2
+\* For Stata versions below 19; for version 19 or higher, the built-in areg function is used.
+\** Used only in calculation of pseudo-R2
 
 ---
 
