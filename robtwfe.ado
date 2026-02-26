@@ -328,9 +328,6 @@ program define robtwfe, eclass sortpreserve
 	matrix beta=b0[.,1..k0]
 	matrix Vc=Vclust
 
-	di `N'
-	di `K'
-	
 	if "`cluster'"=="" {
 		local factor=(`N'/`e_df_r')
 	}
