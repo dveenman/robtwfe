@@ -1,49 +1,49 @@
 # robtwfe
 
-A Stata program to combine robust regression estimation (Huber M) with two-way fixed effects. The program accompanies the Gassen & Veenman (2025) study on ``Estimation Precision and Robust Inference in Archival Research'' (https://ssrn.com/abstract=4975569).
+A Stata program to combine robust regression estimation (Huber M) with two-way fixed effects. The program accompanies the Gassen & Veenman (2026) study on ``Estimation Precision and Robust Inference in Archival Research'' (https://ssrn.com/abstract=4975569).
 
 **Comments/feedback welcome**
 
-`robtwfe` is a program that can be used to combine Huber M-estimation with two-way fixed effects (FE). For a firm-time panel dataset, the program mimics `robreg` for Huber M-estimation with one FE dimension (firm) absorbed and the other FE dimension (time) included as indicator variables. Instead of including the time indicator variables, the program leverages (a) the functionality of `reghdfe` and (b) the fact that the iterative reweighting in the robust estimation relies on a sequence of weighted least squares estimations, which can be combined with two-way FE using `reghdfe`. When the second (time) dimension becomes sufficiently large (e.g., >50), the program is substantially faster than `robreg` and provides the same estimates. 
+`robtwfe` is a program that can be used to combine Huber M-estimation with two-way fixed effects (FE). For a firm-time panel dataset, the program mimics `robreg` for Huber M-estimation with one FE dimension (firm) absorbed and the other FE dimension (time) included as indicator variables. Instead of including the time indicator variables, the program leverages (a) the functionality of `reghdfe` and (b) the fact that the iterative reweighting in the robust estimation relies on a sequence of weighted least squares estimations, which can be combined with two-way FE using `reghdfe`. For the first-step quantile regression that is used to obtain the scale estimate, the program implements the MM-QR estimation from [Machado and Santos Silva (2009)](https://www.sciencedirect.com/science/article/pii/S0304407619300648) to combine quantile regression estimation with fixed effects, which [Rios-Avila, Siles, and Canavire-Bacarreza (2024)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4944894) show is easily extended to the multidimensional fixed effects setting. When the second (time) dimension becomes sufficiently large (e.g., >50), the program is substantially faster than `robreg` and provides the same estimates. 
 
 ---
 
-The program can be installed by simply saving the \*.ado file into your local Stata directory that contains additional ado programs. To identify this folder, type and execute "sysdir" in your Stata command window and go to the folder listed at "PLUS". Make sure to place the program in the folder with the correct starting letter (i.e., the folder named "r") and the file extension is correctly specified as \*.ado.
+Installation:
+```
+net install robtwfe, replace from(https://raw.githubusercontent.com/dveenman/robtwfe/main/)
+```
 
 The program requires `moremata`, `reghdfe`, `hdfe`, and `robreg` to be installed in Stata:
 ```
 ssc inst moremata, replace
-ssc inst reghdfe, replace
 ssc inst hdfe, replace
-ssc inst robreg, replace
+ssc inst reghdfe, replace *
+ssc inst robreg, replace **
 ```
+* For Stata versions below 19; for version 19 or higher, the built-in areg function is used.
+** Used only in calculation of pseudo-R2
 
 ---
 
 Syntax:
 
-**robtwfe m depvar indepvars, ivar(string) tvar(string) cluster(string) eff(numeric) [options]**
+**robtwfe m depvar indepvars, ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str) omitr2]**
 
  - **depvar** is the dependent variable;
  - **indepvars** is/are the independent variable(s);
  - **ivar()** refers to the variable indicating the unit fixed effect to be absorbed, similar to the option in `robreg`;
  - **tvar()** refers to the variable indicating the time fixed effect to be absorbed;
- - **cluster()** refers to the variable specifying the dimension at which standard errors should be clustered (nesting of FE not required);
  - **eff()** refers to the normal efficiency of the robust estimation;
-
----
-
-Optional program options in **[options]**:
-
-- **tol(numeric)**: specifies the tolerance for convergence of the iterative reweighted least squares (default 1e-10);
-- **weightvar(string)**: specifies the name of a new variable to be generated with robust regression weights;
-- **omitr2**: do not compute and report the pseudo R2 (small speed benefit);
+ - **cluster()** refers to the variable specifying the dimension at which standard errors should be clustered (nesting of FE not required); when cluster() is not provided, heteroskedasticity-robust standard errors are computed;
+ - **tol(numeric)**: specifies the tolerance for convergence of the iterative reweighted least squares (default 1e-10);
+ - **weightvar(string)**: specifies the name of a new variable to be generated with robust regression weights;
+ - **omitr2**: do not compute and report the pseudo R2 (small speed benefit);
 
 ---
 
 The following example shows the standard output from the program (the program can be tested using the **test_robtwfe.do** file): 
 
-<img width="635" height="465" alt="image" src="https://github.com/user-attachments/assets/788fd38c-420e-43e3-99c1-10e8327e29c3" />
+<img width="640" height="582" alt="image" src="https://github.com/user-attachments/assets/904515d6-f000-45d4-ad16-6889d1f76191" />
 
 ---
 
