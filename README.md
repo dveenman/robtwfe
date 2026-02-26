@@ -21,7 +21,7 @@ ssc inst reghdfe, replace *
 ssc inst robreg, replace **
 ```
 \* For Stata versions below 19; for version 19 or higher, the built-in areg function is used.
-\** Used only in calculation of pseudo-R2
+\** Used only in calculation of pseudo-R2.
 
 ---
 
@@ -41,9 +41,11 @@ Syntax:
 
 ---
 
-The following example shows the standard output from the program (the program can be tested using the **test_robtwfe.do** file): 
+The following examples show the standard output and speed of the program (the program can be tested using the **test_robtwfe.do** file): 
 
-<img width="640" height="582" alt="image" src="https://github.com/user-attachments/assets/904515d6-f000-45d4-ad16-6889d1f76191" />
+<img width="643" height="665" alt="image" src="https://github.com/user-attachments/assets/c82af52c-429f-4b1c-b8a2-c3d1aef1d9e4" />
+
+<img width="639" height="666" alt="image" src="https://github.com/user-attachments/assets/aa23ea2a-83b9-4c55-8537-90a9b6b51bab" />
 
 ---
 
