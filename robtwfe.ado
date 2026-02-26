@@ -1,6 +1,7 @@
-*! version 1.0.6 20260225 David Veenman
+*! version 1.0.7 20260226 David Veenman
 
 /*
+20260226: 1.0.7     Made SE clustering optional to allow for non-clustered robust standard errors
 20260225: 1.0.6     Small correction in dof calculation with collinear variables + some minor housekeeping 
 20260220: 1.0.5     Speed improvement: replaced first-step MM-QR estimation to allow for multiple fixed effects 
 20260213: 1.0.4     Return scale parameter 
@@ -18,8 +19,8 @@ Dependencies:
 
 program define robtwfe, eclass sortpreserve
 	version 15
-	syntax [anything] [in] [if], cluster(varlist) ivar(str) tvar(str) eff(real) [tol(real 0) weightvar(str) omitr2]
-
+	syntax [anything] [in] [if], ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str) omitr2]
+	
 	capt findfile mf_mm_aqreg.hlp
 	if _rc {
 		di as error "Program requires the {bf:moremata} package: type {stata ssc install moremata, replace}"
@@ -124,10 +125,17 @@ program define robtwfe, eclass sortpreserve
 	}
 	
 	// Check nesting of FE in clusters:
-	capture bysort `ivar': assert `cluster'==`cluster'[1] if !missing(`ivar', `cluster')
-	local nest1=(_rc!=0)
-	capture bysort `tvar': assert `cluster'==`cluster'[1] if !missing(`tvar', `cluster')
-	local nest2=(_rc!=0)
+	if "`cluster'"=="" {
+		local nocluster=1
+		local nest1=1
+		local nest2=1
+	}
+	else {
+		capture bysort `ivar': assert `cluster'==`cluster'[1] if !missing(`ivar', `cluster')
+		local nest1=(_rc!=0)
+		capture bysort `tvar': assert `cluster'==`cluster'[1] if !missing(`tvar', `cluster')
+		local nest2=(_rc!=0)		
+	}
 	if (`nest2'==1) {
 		local nest1dof = 0
 	}
@@ -311,13 +319,26 @@ program define robtwfe, eclass sortpreserve
 	local cvar "`clus1'"	
 	mata: _vce_cluster()    
 	local nclusterdim1=mata_nclusters
-	local e_df_r=mata_nclusters-1
+	if "`cluster'"=="" {
+		local e_df_r=df_initial
+	}
+	else {
+		local e_df_r=mata_nclusters-1
+	}
 	matrix beta=b0[.,1..k0]
 	matrix Vc=Vclust
-	    	
-	local factor=(`nclusterdim1'/(`nclusterdim1'-1))*((`N'-1)/(`N'-`K'))
+
+	di `N'
+	di `K'
+	
+	if "`cluster'"=="" {
+		local factor=(`N'/`e_df_r')
+	}
+	else{
+		local factor=(`nclusterdim1'/(`nclusterdim1'-1))*((`N'-1)/(`N'-`K'))
+	}
 	matrix Vc=`factor'*Vc
-    
+	
 	ereturn clear
 	tempname b V
 
@@ -334,7 +355,9 @@ program define robtwfe, eclass sortpreserve
 	if "`omitr2'"=="" {
 		ereturn scalar r2_p=r2_p
 	}
-	ereturn scalar N_clust=`nclusterdim1'
+	if "`cluster'"!="" {
+		ereturn scalar N_clust=`nclusterdim1'
+	}
 	ereturn scalar scale=scale 
 	
 	di ""
@@ -348,8 +371,10 @@ program define robtwfe, eclass sortpreserve
 	
     ereturn display
     
-	di "SE clustered by " `nclusterdim1' " clusters in " in yellow "`clusterdim1'" 
-
+	if "`cluster'"!="" {
+		di "SE clustered by " `nclusterdim1' " clusters in " in yellow "`clusterdim1'" 
+	}
+	
 	if "`weightvar'"!="" {
 		di in green "Robust weights stored in " in yellow "`weightvar'" 	
 	}
@@ -413,6 +438,7 @@ mata:
 		if (omitr2=="") {
 			mu=st_numscalar("mu")
 		}
+		nocluster=st_local("nocluster")
 		
 		// Process input:
 		k=cols(Xr)
@@ -425,10 +451,17 @@ mata:
 		info=panelsetup(cvar, 1)
         nc=rows(info)
         M=J(k,k,0)
-		for(i=1; i<=nc; i++) {
-			xi=panelsubmatrix(Xr,i,info)
-			psii=panelsubmatrix(psi,i,info)
-			M=M+(xi'*psii)*(psii'*xi) 
+		if (nocluster=="") { // Loop over clusters:
+			for(i=1; i<=nc; i++) {
+				xi=panelsubmatrix(Xr,i,info)
+				psii=panelsubmatrix(psi,i,info)
+				M=M+(xi'*psii)*(psii'*xi) 
+			}			
+		}
+		else { //Else use heteroskedasticity-robust version:
+			psi2=psi:*psi
+			M=quadcross(Xr,psi2,Xr)
+			nc=rows(y)
 		}
 		
 		// Combine:
