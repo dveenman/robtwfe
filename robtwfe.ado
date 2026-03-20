@@ -1,6 +1,7 @@
-*! version 1.0.7 20260226 David Veenman
+*! version 1.0.8 20260320 David Veenman
 
 /*
+20260320: 1.0.8     Fixed minor stability issues 
 20260226: 1.0.7     Made SE clustering optional to allow for non-clustered robust standard errors
 20260225: 1.0.6     Small correction in dof calculation with collinear variables + some minor housekeeping 
 20260220: 1.0.5     Speed improvement: replaced first-step MM-QR estimation to allow for multiple fixed effects 
@@ -28,7 +29,7 @@ program define robtwfe, eclass sortpreserve
 	}
 
 	capt findfile reghdfe.ado 
-	if (_rc & _caller()<19) {
+	if _rc {
 		di as error "Program requires the {bf:reghdfe} package: type {stata ssc install reghdfe, replace}"
 		error 499
 	}
@@ -194,42 +195,28 @@ program define robtwfe, eclass sortpreserve
 	/////////////////////////////////////////////////////////////////////////////////////////
 
 	// Location stage MM-QR (Machado and Santos Silva 2019)
-	tempvar yhat_loc e Ipos r_raw denom u resid_tau
-	if (`stataversion'<19) {
-		qui capture reghdfe `depv' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
-		qui predict double `yhat_loc' if `touse', xbd
-		qui ren _reghdfe_resid `e'
-	}
-	else {
-		qui capture areg `depv' `indepv' if `touse', absorb(`ivarid' `tvarid') noabs 
-		qui predict double `yhat_loc' if `touse', xbd
-		qui predict double `e' if `touse', res
-	}
+	tempvar e Ipos r_raw denom u resid_tau
+	qui capture reghdfe `depv' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
+	qui predict double `e' if `touse', res
+	qui replace `e'=0 if abs(`e')<1e-10 
+	drop _reghdfe_resid
 
 	// Scale stage
-	gen `Ipos' = (`e'>=0) if `touse'
+	qui gen `Ipos' = (`e'>=0) if `touse'
 	qui sum `Ipos' if `touse', meanonly
 	scalar Ibar = r(mean)
-	gen double `r_raw' = 2*`e'*(`Ipos' - Ibar) if `touse'
+	qui gen double `r_raw' = 2*`e'*(`Ipos' - Ibar) if `touse'
 
-	if (`stataversion'<19) {
-		qui capture reghdfe `r_raw' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
-	}
-	else {
-		qui capture areg `r_raw' `indepv' if `touse', absorb(`ivarid' `tvarid') noabs
-	}
+	qui capture reghdfe `r_raw' `indepv' if `touse', absorb(`ivarid' `tvarid') dof(none) notable nofootnote noheader resid keepsin
 	qui predict double `denom' if `touse', xbd
 	
-	scalar eps = sqrt(c(epsdouble))
-	qui replace `denom' = eps if `denom' < eps & `touse'
-
 	// Standardized residuals and create qhat 
-	gen double `u' = `e'/`denom' if `touse'
+	qui gen double `u' = `e'/`denom' if `touse'
 	qui sum `u' if `touse', d // Note: xtqreg and mmqreg use qreg on constant; I use percentile approach instead for consistency with robreg and Mata function mm_aqreg()
 	scalar qhat = r(p50)
 
 	// Residuals:
-	gen double `resid_tau' = `depv' - (`yhat_loc' + qhat*`denom') if `touse'
+	qui gen double `resid_tau' = `e' - qhat*`denom' if `touse'
 	
 	// Get relevant information from the data before creating scale estimate:
 	qui sum `depv' if `touse'

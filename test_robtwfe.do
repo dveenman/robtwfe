@@ -37,4 +37,8 @@ timer on 2
 robtwfe m y x x2, ivar(firm) tvar(period) cluster(group) eff(95) 
 timer off 2
 
-timer list
+// Time for robreg:
+timer list 1
+
+// Time for robtwfe:
+timer list 2

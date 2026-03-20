@@ -17,11 +17,10 @@ The program requires `moremata`, `reghdfe`, `hdfe`, and `robreg` to be installed
 ```
 ssc inst moremata, replace
 ssc inst hdfe, replace
-ssc inst reghdfe, replace *
-ssc inst robreg, replace **
+ssc inst reghdfe, replace 
+ssc inst robreg, replace *
 ```
-\* For Stata versions below 19; for version 19 or higher, the built-in areg function is used.
-\** Used only in calculation of pseudo-R2.
+\* Used only in calculation of pseudo-R2.
 
 ---
 
