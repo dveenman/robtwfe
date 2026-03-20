@@ -291,7 +291,7 @@ program define robtwfe, eclass sortpreserve
 		mata: _madn()
 		matrix mu0=mu0
 		local madn=scale0
-		qui robreg m `depv' if `touse', eff(95) nor2 nose tol(`tolerance') init(mu0) scale(`madn')
+		qui robreg m `depv' if `touse', eff(`eff') nor2 nose tol(`tolerance') init(mu0) scale(`madn')
 		scalar mu=_b[_cons]				
 	}
 	
