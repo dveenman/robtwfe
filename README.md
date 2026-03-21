@@ -13,20 +13,18 @@ Installation:
 net install robtwfe, replace from(https://raw.githubusercontent.com/dveenman/robtwfe/main/)
 ```
 
-The program requires `moremata`, `reghdfe`, `hdfe`, and `robreg` to be installed in Stata:
+The program requires `moremata`, `reghdfe`, and `hdfe` to be installed in Stata:
 ```
 ssc inst moremata, replace
 ssc inst hdfe, replace
 ssc inst reghdfe, replace 
-ssc inst robreg, replace *
 ```
-\* Used only in calculation of pseudo-R2.
 
 ---
 
 Syntax:
 
-**robtwfe m depvar indepvars, ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str) omitr2]**
+**robtwfe m depvar indepvars, ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str)]**
 
  - **depvar** is the dependent variable;
  - **indepvars** is/are the independent variable(s);
@@ -36,8 +34,7 @@ Syntax:
  - **cluster()** refers to the variable specifying the dimension at which standard errors should be clustered (nesting of FE not required); when cluster() is not provided, heteroskedasticity-robust standard errors are computed;
  - **tol(numeric)**: specifies the tolerance for convergence of the iterative reweighted least squares (default 1e-10);
  - **weightvar(string)**: specifies the name of a new variable to be generated with robust regression weights;
- - **omitr2**: do not compute and report the pseudo R2 (small speed benefit);
-
+ 
 ---
 
 The following examples show the standard output and speed of the program (the program can be tested using the **test_robtwfe.do** file): 

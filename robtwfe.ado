@@ -1,6 +1,7 @@
-*! version 1.0.8 20260320 David Veenman
+*! version 1.0.9 20260321 David Veenman
 
 /*
+20260321: 1.0.9     Removed reliance on robreg for part of Pseudo R2 calculation
 20260320: 1.0.8     Fixed minor stability issues 
 20260226: 1.0.7     Made SE clustering optional to allow for non-clustered robust standard errors
 20260225: 1.0.6     Small correction in dof calculation with collinear variables + some minor housekeeping 
@@ -15,12 +16,11 @@ Dependencies:
    moremata
    reghdfe
    hdfe
-   robreg
 */
 
 program define robtwfe, eclass sortpreserve
 	version 15
-	syntax [anything] [in] [if], ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str) omitr2]
+	syntax [anything] [in] [if], ivar(str) tvar(str) eff(real) [cluster(varlist) tol(real 0) weightvar(str)]
 	
 	capt findfile mf_mm_aqreg.hlp
 	if _rc {
@@ -39,12 +39,6 @@ program define robtwfe, eclass sortpreserve
 	capt findfile hdfe.ado 
 	if _rc {
 		di as error "Program requires the {bf:hdfe} package: type {stata ssc install hdfe, replace}"
-		error 499
-	}
-
-	capt findfile robreg.ado 
-	if (_rc & "`omitr2'"=="") {
-		di as error "Program requires the {bf:robreg} package: type {stata ssc install robreg, replace}"
 		error 499
 	}
 
@@ -287,13 +281,8 @@ program define robtwfe, eclass sortpreserve
 	}
 
 	// For calculation of Pseudo R2:
-	if "`omitr2'"=="" {
-		mata: _madn()
-		matrix mu0=mu0
-		local madn=scale0
-		qui robreg m `depv' if `touse', eff(`eff') nor2 nose tol(`tolerance') init(mu0) scale(`madn')
-		scalar mu=_b[_cons]				
-	}
+	scalar maxiter=`maxiter'
+	mata: _huber_location()
 	
 	mata: ""
     /////////////////////////////////////////////////////////////////////////////////////////
@@ -336,9 +325,7 @@ program define robtwfe, eclass sortpreserve
 	ereturn post `b' `V'
 	ereturn scalar df_r=`e_df_r'
 	ereturn scalar N=`N'
-	if "`omitr2'"=="" {
-		ereturn scalar r2_p=r2_p
-	}
+	ereturn scalar r2_p=r2_p
 	if "`cluster'"!="" {
 		ereturn scalar N_clust=`nclusterdim1'
 	}
@@ -349,9 +336,7 @@ program define robtwfe, eclass sortpreserve
 		in yellow "`ivar'" in green " and " in yellow "`tvar'"
 	di ""
 	di _column(51) in green "Number of obs = " %12.0fc in yellow e(N)
-	if "`omitr2'"=="" {
-		di _column(51) in green "Pseudo R2" _column(65) "= " %12.4f in yellow e(r2_p)
-	}
+	di _column(51) in green "Pseudo R2" _column(65) "= " %12.4f in yellow e(r2_p)
 	
     ereturn display
     
@@ -418,10 +403,7 @@ mata:
 		st_view(cvar=., ., tokens(st_local("cvar")), st_local("touse"))
 		scale=st_numscalar("scale")		
 		krob=st_numscalar("krob")
-		omitr2=st_local("omitr2")
-		if (omitr2=="") {
-			mu=st_numscalar("mu")
-		}
+		mu=st_numscalar("mu")
 		nocluster=st_local("nocluster")
 		
 		// Process input:
@@ -456,13 +438,11 @@ mata:
 		st_numscalar("mata_nclusters",nc)
 
 		// Compute pseudo-R2:
-		if (omitr2=="") {
-			z0=(y:-mu):/scale
-			rho=mm_huber_rho(z,krob)			
-			rho0=mm_huber_rho(z0, krob)
-			r2_p=1-(colsum(rho)/colsum(rho0))
-			st_numscalar("r2_p", r2_p)
-		}
+		z0=(y:-mu):/scale
+		rho=mm_huber_rho(z,krob)			
+		rho0=mm_huber_rho(z0, krob)
+		r2_p=1-(colsum(rho)/colsum(rho0))
+		st_numscalar("r2_p", r2_p)
 	}
 	    
 	void _scale_initial() {
@@ -491,14 +471,23 @@ mata:
         printf(".")
     }
 
-	void _madn() {
+	void _huber_location() {
 		st_view(y=., ., tokens(st_local("depv")), st_local("touse"))
-		mu0 = mm_median(y)
-        scale0 = mm_median(abs(y :- mu0)) / invnormal(0.75)
-        st_numscalar("mu0", mu0)
-		st_numscalar("scale0", scale0)
+		eff=st_numscalar("eff")
+		maxiter=st_numscalar("maxiter")
+		k=mm_huber_k(eff)
+		mu=mm_median(y)
+        scale=mm_median(abs(y :- mu)) / invnormal(0.75)
+		for (i=1; i<=maxiter; i++) {
+			u=(y:-mu):/scale
+			w=mm_huber_w(u, k)
+			mu_new=sum(w:*y) /sum(w)
+			if (abs(mu_new-mu)<1e-10) break
+			mu=mu_new
+		}
+		st_numscalar("mu", mu)
 	}
-    
+	
 end
 	
 	
