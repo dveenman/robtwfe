@@ -1,7 +1,9 @@
 .Rproj
+*.Rproj
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
 oldversions
 *.stswp
+*.html
