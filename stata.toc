@@ -1,2 +1,0 @@
-v 1
-p robtwe Stata program for robust regression with twoway fixed effects and standard error clustering
